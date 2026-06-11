@@ -1,0 +1,32 @@
+positions:
+  - name: "中级运维工程师_北京 16-18k"
+    boss_url: "https://www.zhipin.com/web/geek/chat"
+
+    screening:
+      required:
+        - field: "status"
+          not_in: ["在职-暂不考虑"]
+        - field: "skills"
+          contains_any: ["k8s", "kubernetes"]
+        - field: "skills"
+          contains_any: ["ci/cd", "jenkins", "gitlab ci", "github actions"]
+
+      preferred:
+        - field: "skills"
+          contains_any: ["docker", "containerd"]
+          weight: 10
+        - field: "skills"
+          contains_any: ["helm", "kustomize"]
+          weight: 8
+        - field: "skills"
+          contains_any: ["prometheus", "grafana"]
+          weight: 5
+        - field: "experience_years"
+          min: 3
+          max: 7
+          weight: 10
+        - field: "salary_expectation"
+          max: 18000
+          weight: 5
+
+      pass_threshold: 15

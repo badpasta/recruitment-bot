@@ -1,0 +1,14 @@
+positions:
+  - name: "Test Position"
+    boss_url: "https://www.zhipin.com/web/geek/chat"
+    screening:
+      required:
+        - field: "status"
+          not_in: ["在职-暂不考虑"]
+        - field: "skills"
+          contains_any: ["k8s", "kubernetes"]
+      preferred:
+        - field: "skills"
+          contains_any: ["docker"]
+          weight: 10
+      pass_threshold: 10
