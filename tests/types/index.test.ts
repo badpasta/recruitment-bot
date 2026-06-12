@@ -12,6 +12,11 @@ describe("isValidScreeningStatus", () => {
     expect(isValidScreeningStatus("pending")).toBe(true);
   });
 
+  it("accepts interview and eliminated statuses", () => {
+    expect(isValidScreeningStatus("interview")).toBe(true);
+    expect(isValidScreeningStatus("eliminated")).toBe(true);
+  });
+
   it("rejects invalid statuses", () => {
     expect(isValidScreeningStatus("unknown")).toBe(false);
     expect(isValidScreeningStatus("")).toBe(false);

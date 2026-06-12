@@ -34,9 +34,9 @@ export interface ProjectEntry {
 }
 
 /** Status of a screening result */
-export type ScreeningStatus = "passed" | "rejected" | "pending";
+export type ScreeningStatus = "passed" | "rejected" | "pending" | "interview" | "eliminated";
 
-const VALID_STATUSES: ScreeningStatus[] = ["passed", "rejected", "pending"];
+const VALID_STATUSES: ScreeningStatus[] = ["passed", "rejected", "pending", "interview", "eliminated"];
 
 export function isValidScreeningStatus(s: string): s is ScreeningStatus {
   return VALID_STATUSES.includes(s as ScreeningStatus);
@@ -99,9 +99,38 @@ export interface PreferredRule extends RequiredRule {
   weight: number;
 }
 
+/** Email configuration for SMTP/IMAP */
+export interface EmailConfig {
+  smtpHost: string;
+  smtpPort: number;
+  smtpUser: string;
+  fromName: string;
+  to: string;
+  imapHost: string;
+  imapPort: number;
+  imapUser: string;
+  replyKeywords: Record<string, string[]>;
+}
+
+/** An entry in the email_log table */
+export interface EmailLogEntry {
+  id?: number;
+  candidateId: string;
+  positionName: string;
+  direction: "sent" | "received";
+  messageId?: string;
+  inReplyTo?: string;
+  subject?: string;
+  body?: string;
+  keywordDetected?: string;
+  statusUpdated: boolean;
+  processedAt?: string;
+}
+
 /** Top-level YAML config structure */
 export interface AppConfig {
   positions: PositionConfig[];
+  email?: EmailConfig;
 }
 
 /** Runtime guard for Candidate objects */
