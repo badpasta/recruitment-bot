@@ -18,6 +18,7 @@ class MockBrowserClient implements BrowserClient {
   private candidateList: unknown = [];
   private candidateDetail: unknown = {};
   private evalCallCount = 0;
+  private dataCallCount = 0;
 
   setCandidateList(list: unknown): void {
     this.candidateList = list;
@@ -35,10 +36,13 @@ class MockBrowserClient implements BrowserClient {
     return "<html>mock</html>";
   }
 
-  async evaluate<T>(_code: string): Promise<T> {
+  async evaluate<T>(code: string): Promise<T> {
     this.evalCallCount++;
-    // First call: candidate list; subsequent: detail pages
-    if (this.evalCallCount === 1) return this.candidateList as T;
+    // Click-via-JS calls return a string result
+    if (code.includes("scrollIntoView")) return "clicked" as T;
+    // Data calls: first is list, rest are detail
+    this.dataCallCount++;
+    if (this.dataCallCount === 1) return this.candidateList as T;
     return this.candidateDetail as T;
   }
 

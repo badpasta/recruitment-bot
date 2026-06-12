@@ -47,18 +47,26 @@ export class Scraper {
     await randomDelay(this.options.minDelay, this.options.maxDelay);
 
     // Extract candidate list via JS evaluation in the browser
+    // Boss直聘 chat page structure: .geek-item-wrap > .geek-item (with data-id)
+    // Each item contains: .geek-name, .source-job (position), .time, .push-text (last msg)
     let rawList: RawCandidateListItem[];
     try {
       rawList = await browser.evaluate<RawCandidateListItem[]>(`(() => {
-        const items = document.querySelectorAll('.chat-item, .candidate-item, [class*="chat"]');
-        return Array.from(items).map(item => ({
-          name: item.querySelector('.name, .geek-name')?.textContent?.trim() || '',
-          status: item.querySelector('.status, .job-status')?.textContent?.trim() || '',
-          skills: item.querySelector('.skills, .tag-list')?.textContent?.trim() || '',
-          experienceYears: item.querySelector('.exp, .work-year')?.textContent?.trim() || '',
-          salaryExpectation: item.querySelector('.salary, .expect-salary')?.textContent?.trim() || '',
-          profileUrl: item.querySelector('a')?.href || '',
-        }));
+        const items = document.querySelectorAll('.geek-item');
+        return Array.from(items).map(item => {
+          const sourceJob = item.querySelector('.source-job')?.textContent?.trim() || '';
+          const grayStatus = item.querySelector('.gray')?.textContent?.trim() || '';
+          const status = [sourceJob, grayStatus].filter(Boolean).join(' | ');
+          return {
+            name: item.querySelector('.geek-name')?.textContent?.trim() || '',
+            status,
+            skills: '',
+            experienceYears: '',
+            salaryExpectation: '',
+            profileUrl: '',
+            candidateId: item.getAttribute('data-id') || '',
+          };
+        });
       })()`);
     } catch (err) {
       log.error(`Failed to evaluate candidate list: ${err}`);
@@ -78,29 +86,72 @@ export class Scraper {
 
     for (const candidate of newCandidates) {
       try {
-        await browser.navigate(candidate.profileUrl);
+        // Click on the candidate in the chat list to open their conversation
+        // Use JS click via evaluate for reliability (kimi-webbridge click() can fail on Vue components)
+        const escapedId = candidate.id.replace(/"/g, '\\"');
+        const clickResult = await browser.evaluate<string>(`(() => {
+          const item = document.querySelector('.geek-item[data-id="${escapedId}"]');
+          if (!item) return 'not_found';
+          item.scrollIntoView({behavior: 'instant', block: 'center'});
+          item.click();
+          return 'clicked';
+        })()`);
+        if (clickResult === "not_found") {
+          log.warn(`Candidate ${candidate.id} not found in DOM, skipping`);
+          continue;
+        }
         await randomDelay(this.options.minDelay, this.options.maxDelay);
 
+        // Extract detail info from the chat sidebar (right panel)
         const rawDetail = await browser.evaluate<RawCandidateDetail>(`(() => {
-          const skills = Array.from(
-            document.querySelectorAll('.skill-tag, .tag-item, [class*="skill"]')
-          ).map(el => el.textContent?.trim() || '');
-          const workItems = document.querySelectorAll('.work-item, [class*="work-exp"]');
-          const workHistory = Array.from(workItems).map(item => ({
-            company: item.querySelector('.company')?.textContent?.trim() || '',
-            title: item.querySelector('.title, .position')?.textContent?.trim() || '',
-            startDate: item.querySelector('.date, .time')?.textContent?.trim() || '',
-            endDate: '',
-            description: item.querySelector('.desc, .content')?.textContent?.trim() || '',
-          }));
-          const projectItems = document.querySelectorAll('.project-item, [class*="project"]');
-          const projectHistory = Array.from(projectItems).map(item => ({
-            name: item.querySelector('.name, .title')?.textContent?.trim() || '',
-            description: item.querySelector('.desc, .content')?.textContent?.trim() || '',
-          }));
+          const baseInfo = document.querySelector('.base-info-single-container');
+          if (!baseInfo) return { skills: [], workHistory: [], projectHistory: [] };
+
+          // Parse time + content pairs from the experience section
+          const timeEls = baseInfo.querySelectorAll('.time-content .time, .experience-content .time');
+          const contentEls = baseInfo.querySelectorAll('.detail-list .value, .detail-list .work-content');
+          const workHistory = [];
+          const times = Array.from(timeEls).map(el => el.textContent?.trim() || '');
+          const contents = Array.from(contentEls).map(el => el.textContent?.trim() || '');
+
+          for (let i = 0; i < contents.length; i++) {
+            const text = contents[i];
+            const date = times[i] || '';
+            // Work entries have "company · title" pattern
+            // Education entries have "school · major · degree" pattern
+            const parts = text.split('·').map(s => s.trim());
+            if (parts.length >= 2) {
+              // Heuristic: if it looks like education (has degree keywords), skip for workHistory
+              const isEdu = /硕士|博士|本科|大专|学士|MBA|EMBA/.test(text);
+              if (!isEdu) {
+                workHistory.push({
+                  company: parts[0] || '',
+                  title: parts[1] || '',
+                  startDate: date,
+                  endDate: '',
+                  description: '',
+                });
+              }
+            }
+          }
+
+          // Extract salary expectation from sidebar text
+          const slideText = baseInfo.querySelector('.slide-content-click-content, .base-info-single-main')?.textContent || '';
+          const salaryMatch = slideText.match(/(\\d+)\\s*[-~]\\s*(\\d+)\\s*[Kk]/);
+          const salaryExpectation = salaryMatch
+            ? salaryMatch[0]
+            : '';
+
+          // Extract expected position
+          const expectMatch = slideText.match(/期望[：:]\\s*([^\\d]+?)\\s*(\\d|$)/);
+
           return {
-            skills, workHistory, projectHistory,
-            selfEvaluation: document.querySelector('.self-eval, [class*="evaluate"]')?.textContent?.trim() || '',
+            skills: [],
+            workHistory,
+            projectHistory: [],
+            selfEvaluation: '',
+            salaryExpectation: salaryExpectation,
+            experienceYears: '',
           };
         })()`);
 
@@ -114,7 +165,6 @@ export class Scraper {
         results.push(enriched);
         log.info(`Scraped: ${enriched.name} (${enriched.id})`);
 
-        await browser.navigate(bossUrl);
         await randomDelay(this.options.minDelay, this.options.maxDelay);
       } catch (err) {
         log.error(`Failed to scrape candidate ${candidate.id}: ${err}`);

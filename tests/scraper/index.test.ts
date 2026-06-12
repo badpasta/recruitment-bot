@@ -2,11 +2,13 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { Scraper } from "../../src/scraper/index.js";
 import type { BrowserClient } from "../../src/scraper/browser-client.js";
 import type { Candidate } from "../../src/types/index.js";
-import { extractCandidateId } from "../../src/utils/anti-detect.js";
 
 class MockBrowserClient implements BrowserClient {
   public navigatedUrls: string[] = [];
+  public clickedSelectors: string[] = [];
+  public clickCallIds: string[] = [];
   public evaluateCallCount = 0;
+  private detailCallCount = 0;
   private listResult: unknown = [];
   private detailResult: unknown = {};
   private shouldThrow = false;
@@ -31,15 +33,24 @@ class MockBrowserClient implements BrowserClient {
     return "<html>mock</html>";
   }
 
-  async evaluate<T>(_code: string): Promise<T> {
+  async evaluate<T>(code: string): Promise<T> {
     if (this.shouldThrow) throw new Error("Browser error");
     this.evaluateCallCount++;
-    // First call: candidate list; subsequent: detail pages
-    if (this.evaluateCallCount === 1) return this.listResult as T;
+    // Click-via-JS calls return a string result, not data
+    if (code.includes("scrollIntoView")) {
+      const match = code.match(/data-id="([^"]+)"/);
+      if (match) this.clickCallIds.push(match[1]);
+      return "clicked" as T;
+    }
+    // Data calls: first is list, rest are detail
+    this.detailCallCount++;
+    if (this.detailCallCount === 1) return this.listResult as T;
     return this.detailResult as T;
   }
 
-  async click(_selector: string): Promise<void> {}
+  async click(selector: string): Promise<void> {
+    this.clickedSelectors.push(selector);
+  }
   async disconnect(): Promise<void> {}
 }
 
@@ -71,6 +82,7 @@ const MOCK_RAW_LIST = [
     experienceYears: "3-5年",
     salaryExpectation: "16-18K",
     profileUrl: "https://www.zhipin.com/gongke/candidate_abc001.html",
+    candidateId: "100001-0",
   },
   {
     name: "李四",
@@ -79,6 +91,7 @@ const MOCK_RAW_LIST = [
     experienceYears: "2年",
     salaryExpectation: "15K",
     profileUrl: "https://www.zhipin.com/gongke/candidate_def002.html",
+    candidateId: "100002-0",
   },
 ];
 
@@ -167,7 +180,7 @@ describe("Scraper", () => {
     });
 
     it("skips already-existing candidates", async () => {
-      const existingId = extractCandidateId(MOCK_RAW_LIST[0].profileUrl);
+      const existingId = MOCK_RAW_LIST[0].candidateId;
       store.addExisting(existingId);
 
       browser.setListResult(MOCK_RAW_LIST);
@@ -195,15 +208,16 @@ describe("Scraper", () => {
       expect(store.upsertedCandidates.length).toBe(2);
     });
 
-    it("navigates to each candidate's profile URL and back to bossUrl", async () => {
+    it("clicks each candidate in the chat list to extract details", async () => {
       browser.setListResult(MOCK_RAW_LIST);
       browser.setDetailResult(MOCK_RAW_DETAIL);
 
       await scraper.scrapeRound(browser, BOSS_URL);
 
-      // bossUrl → candidate1 profile → bossUrl → candidate2 profile → bossUrl
-      const bossNavigations = browser.navigatedUrls.filter((u) => u === BOSS_URL);
-      expect(bossNavigations.length).toBeGreaterThanOrEqual(3);
+      // Should click on each new candidate by data-id via JS evaluate
+      expect(browser.clickCallIds.length).toBe(2);
+      expect(browser.clickCallIds[0]).toBe("100001-0");
+      expect(browser.clickCallIds[1]).toBe("100002-0");
     });
   });
 });

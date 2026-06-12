@@ -8,6 +8,7 @@ export interface RawCandidateListItem {
   experienceYears: string;
   salaryExpectation: string;
   profileUrl: string;
+  candidateId?: string;
 }
 
 export interface RawCandidateDetail {
@@ -22,7 +23,7 @@ export interface RawCandidateDetail {
 
 export function parseCandidateList(items: RawCandidateListItem[]): Candidate[] {
   return items.map((item) => ({
-    id: extractCandidateId(item.profileUrl),
+    id: item.candidateId || extractCandidateId(item.profileUrl),
     name: item.name,
     profileUrl: item.profileUrl,
     rawProfile: {
