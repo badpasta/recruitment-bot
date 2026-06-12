@@ -43,4 +43,64 @@ describe("ResultStore", () => {
     results.updateStatus("c1", "Test", "passed");
     expect(results.getByStatus("passed")).toHaveLength(1);
   });
+
+  it("supports interview and eliminated statuses", () => {
+    const id1 = results.insert({ candidateId: "c1", positionName: "Test", status: "passed", score: 25, matchDetails: { requiredMatched: [], preferredMatched: [], totalScore: 25, threshold: 15 } });
+    results.updateStatusById(id1, "interview");
+    expect(results.getByStatus("interview")).toHaveLength(1);
+
+    const id2 = results.insert({ candidateId: "c1", positionName: "Test2", status: "passed", score: 10, matchDetails: { requiredMatched: [], preferredMatched: [], totalScore: 10, threshold: 15 } });
+    results.updateStatusById(id2, "eliminated");
+    expect(results.getByStatus("eliminated")).toHaveLength(1);
+  });
+
+  describe("getPassedNotNotified", () => {
+    it("returns passed results that have not been emailed", () => {
+      results.insert({ candidateId: "c1", positionName: "A", status: "passed", score: 20, matchDetails: { requiredMatched: [], preferredMatched: [], totalScore: 20, threshold: 15 } });
+      results.insert({ candidateId: "c1", positionName: "B", status: "rejected", score: 5, matchDetails: { requiredMatched: [], preferredMatched: [], totalScore: 5, threshold: 15 } });
+      const pending = results.getPassedNotNotified();
+      expect(pending).toHaveLength(1);
+      expect(pending[0].positionName).toBe("A");
+    });
+
+    it("excludes results already marked as email-notified", () => {
+      const id = results.insert({ candidateId: "c1", positionName: "A", status: "passed", score: 20, matchDetails: { requiredMatched: [], preferredMatched: [], totalScore: 20, threshold: 15 } });
+      results.markEmailNotified(id);
+      expect(results.getPassedNotNotified()).toHaveLength(0);
+    });
+  });
+
+  describe("markEmailNotified", () => {
+    it("sets email_notified_at timestamp", () => {
+      const id = results.insert({ candidateId: "c1", positionName: "A", status: "passed", score: 20, matchDetails: { requiredMatched: [], preferredMatched: [], totalScore: 20, threshold: 15 } });
+      results.markEmailNotified(id);
+      const result = results.getById(id);
+      expect(result).not.toBeNull();
+      expect(result!.emailNotifiedAt).toBeDefined();
+    });
+  });
+
+  describe("updateStatusById", () => {
+    it("updates status by row ID", () => {
+      const id = results.insert({ candidateId: "c1", positionName: "A", status: "passed", score: 20, matchDetails: { requiredMatched: [], preferredMatched: [], totalScore: 20, threshold: 15 } });
+      results.updateStatusById(id, "interview");
+      const result = results.getById(id);
+      expect(result!.status).toBe("interview");
+    });
+  });
+
+  describe("getById", () => {
+    it("returns null for non-existent ID", () => {
+      expect(results.getById(99999)).toBeNull();
+    });
+
+    it("returns the result with all fields", () => {
+      const id = results.insert({ candidateId: "c1", positionName: "Test", status: "passed", score: 25, matchDetails: { requiredMatched: [], preferredMatched: [], totalScore: 25, threshold: 15 } });
+      const result = results.getById(id);
+      expect(result).not.toBeNull();
+      expect(result!.candidateId).toBe("c1");
+      expect(result!.positionName).toBe("Test");
+      expect(result!.score).toBe(25);
+    });
+  });
 });
