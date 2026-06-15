@@ -30,3 +30,16 @@ positions:
           weight: 5
 
       pass_threshold: 15
+
+email:
+  smtp_host: "smtp.mxhichina.com"
+  smtp_port: 465
+  smtp_user: "wangjingyu@01zhuanche.com"
+  from_name: "招聘筛选系统"
+  to: "wangjingyu@01zhuanche.com"
+  imap_host: "imap.mxhichina.com"
+  imap_port: 993
+  imap_user: "wangjingyu@01zhuanche.com"
+  reply_keywords:
+    interview: ["约面试", "安排面试", "可以面试"]
+    eliminated: ["淘汰", "不合适", "不考虑"]

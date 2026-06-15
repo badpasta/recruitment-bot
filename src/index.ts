@@ -4,10 +4,15 @@ import { initDatabase } from "./store/db.js";
 import { CandidateStore } from "./store/candidates.js";
 import { ResultStore } from "./store/results.js";
 import { RunStateStore } from "./store/run-state.js";
+import { EmailLogStore } from "./store/email-log.js";
 import { KimiWebBridgeClient } from "./scraper/browser-client.js";
 import { Scraper } from "./scraper/index.js";
 import { Screener } from "./screener/index.js";
 import { Scheduler } from "./scheduler/index.js";
+import { EmailSender } from "./email/sender.js";
+import { ReplyMonitor } from "./email/monitor.js";
+import { NodemailerTransport } from "./email/nodemailer-transport.js";
+import { ImapFlowClient } from "./email/imapflow-client.js";
 import { createLogger } from "./utils/logger.js";
 
 const log = createLogger("recruitment-bot");
@@ -28,12 +33,52 @@ async function main(): Promise<void> {
   const candidateStore = new CandidateStore(db);
   const resultStore = new ResultStore(db);
   const runState = new RunStateStore(db);
+  const emailLogStore = new EmailLogStore(db);
 
   const browser = new KimiWebBridgeClient(WEBBRIDGE_ENDPOINT);
 
   const position = config.positions[0];
   const screener = new Screener(position.screening);
   const scraper = new Scraper(candidateStore);
+
+  // Initialize email modules if configured
+  const emailPassword = process.env.EMAIL_PASSWORD ?? "";
+  let emailSender: EmailSender | null = null;
+  let replyMonitor: ReplyMonitor | null = null;
+
+  if (config.email && emailPassword) {
+    const transport = new NodemailerTransport(
+      config.email.smtpHost,
+      config.email.smtpPort,
+      config.email.smtpUser,
+      emailPassword,
+      config.email.fromName,
+    );
+    emailSender = new EmailSender(
+      transport,
+      emailLogStore,
+      resultStore,
+      candidateStore,
+      config.email,
+    );
+
+    const imapClient = new ImapFlowClient(
+      config.email.imapHost,
+      config.email.imapPort,
+      config.email.imapUser,
+      emailPassword,
+    );
+    replyMonitor = new ReplyMonitor(
+      imapClient,
+      emailLogStore,
+      resultStore,
+      config.email,
+    );
+
+    log.info("Email modules initialized (SMTP + IMAP)");
+  } else if (config.email && !emailPassword) {
+    log.warn("EMAIL_PASSWORD not set, email modules disabled");
+  }
 
   async function scanRound(): Promise<void> {
     if (runState.get("is_paused") === "true") {
@@ -76,7 +121,30 @@ async function main(): Promise<void> {
     }
   }
 
-  const scheduler = new Scheduler(scanRound, { intervalMs: SCAN_INTERVAL_MS, maxBackoffMs: 1800000 });
+  async function fullRound(): Promise<void> {
+    // 1. Scrape and screen candidates
+    await scanRound();
+
+    // 2. Send emails for passed candidates
+    if (emailSender) {
+      try {
+        await emailSender.sendPending(position.name);
+      } catch (err) {
+        log.error(`Email send round failed: ${err}`);
+      }
+    }
+
+    // 3. Check for reply emails
+    if (replyMonitor) {
+      try {
+        await replyMonitor.checkReplies();
+      } catch (err) {
+        log.error(`Reply monitor failed: ${err}`);
+      }
+    }
+  }
+
+  const scheduler = new Scheduler(fullRound, { intervalMs: SCAN_INTERVAL_MS, maxBackoffMs: 1800000 });
 
   log.info(`Service started, scanning every ${SCAN_INTERVAL_MS / 1000}s...`);
   log.info(`kimi-webbridge endpoint: ${WEBBRIDGE_ENDPOINT}`);

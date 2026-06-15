@@ -3,10 +3,14 @@ import { initDatabase } from "../../src/store/db.js";
 import { CandidateStore } from "../../src/store/candidates.js";
 import { ResultStore } from "../../src/store/results.js";
 import { RunStateStore } from "../../src/store/run-state.js";
+import { EmailLogStore } from "../../src/store/email-log.js";
 import { Scraper } from "../../src/scraper/index.js";
 import { Screener } from "../../src/screener/index.js";
+import { EmailSender } from "../../src/email/sender.js";
+import { ReplyMonitor } from "../../src/email/monitor.js";
+import type { EmailTransport, ImapClient, ImapMessage } from "../../src/email/types.js";
 import type { BrowserClient } from "../../src/scraper/browser-client.js";
-import type { ScreeningConfig, CandidateProfile, Candidate } from "../../src/types/index.js";
+import type { ScreeningConfig, CandidateProfile, Candidate, EmailConfig } from "../../src/types/index.js";
 import type Database from "better-sqlite3";
 
 /**
@@ -298,5 +302,172 @@ describe("E2E Pipeline Tests", () => {
     browser.setCandidateDetail(RAW_CANDIDATE_DETAIL);
     const candidates = await scraper.scrapeRound(browser, BOSS_URL);
     expect(candidates.length).toBeGreaterThan(0);
+  });
+});
+
+class MockEmailTransport implements EmailTransport {
+  public sentMails: { to: string; subject: string; html: string }[] = [];
+  public messageIdCounter = 0;
+
+  async sendMail(options: { to: string; subject: string; html: string }) {
+    this.sentMails.push(options);
+    this.messageIdCounter++;
+    return { messageId: `<mock-${this.messageIdCounter}@test>` };
+  }
+}
+
+class MockImapClient implements ImapClient {
+  public messages: ImapMessage[] = [];
+  public markedSeen: number[] = [];
+
+  async connect() {}
+  async fetchUnseen() { return this.messages; }
+  async markSeen(uid: number) { this.markedSeen.push(uid); }
+  async disconnect() {}
+}
+
+describe("E2E Email Integration", () => {
+  const emailConfig: EmailConfig = {
+    smtpHost: "",
+    smtpPort: 465,
+    smtpUser: "",
+    fromName: "",
+    to: "boss@test.com",
+    imapHost: "",
+    imapPort: 993,
+    imapUser: "",
+    replyKeywords: { interview: ["约面试"], eliminated: ["淘汰"] },
+  };
+
+  it("sends email for passed candidate and processes interview reply", async () => {
+    const db = initDatabase(":memory:");
+    const candidateStore = new CandidateStore(db);
+    const resultStore = new ResultStore(db);
+    const emailLogStore = new EmailLogStore(db);
+
+    // Seed candidate
+    candidateStore.upsert({
+      id: "c1",
+      name: "张三",
+      profileUrl: "",
+      rawProfile: { skills: ["k8s"], workHistory: [], projectHistory: [] },
+    });
+
+    // Insert passed screening
+    resultStore.insert({
+      candidateId: "c1",
+      positionName: "运维",
+      status: "passed",
+      score: 20,
+      matchDetails: {
+        requiredMatched: [],
+        preferredMatched: [],
+        totalScore: 20,
+        threshold: 15,
+      },
+    });
+
+    // Send email
+    const transport = new MockEmailTransport();
+    const sender = new EmailSender(
+      transport,
+      emailLogStore,
+      resultStore,
+      candidateStore,
+      emailConfig,
+    );
+    await sender.sendPending("运维");
+    expect(transport.sentMails.length).toBe(1);
+
+    // Verify sent log
+    const sentLog = emailLogStore.findByMessageId("<mock-1@test>");
+    expect(sentLog).not.toBeNull();
+
+    // Simulate reply
+    const imapClient = new MockImapClient();
+    imapClient.messages = [
+      {
+        uid: 1,
+        messageId: "<reply-001@test>",
+        inReplyTo: "<mock-1@test>",
+        subject: "Re: 招聘筛选",
+        text: "约面试",
+      },
+    ];
+    const monitor = new ReplyMonitor(
+      imapClient,
+      emailLogStore,
+      resultStore,
+      emailConfig,
+    );
+    await monitor.checkReplies();
+
+    // Verify status updated to interview
+    const results = resultStore.getByStatus("interview");
+    expect(results.length).toBe(1);
+    expect(results[0].candidateId).toBe("c1");
+
+    db.close();
+  });
+
+  it("sends email and processes eliminated reply", async () => {
+    const db = initDatabase(":memory:");
+    const candidateStore = new CandidateStore(db);
+    const resultStore = new ResultStore(db);
+    const emailLogStore = new EmailLogStore(db);
+
+    candidateStore.upsert({
+      id: "c2",
+      name: "李四",
+      profileUrl: "",
+      rawProfile: { skills: ["k8s"], workHistory: [], projectHistory: [] },
+    });
+
+    resultStore.insert({
+      candidateId: "c2",
+      positionName: "运维",
+      status: "passed",
+      score: 20,
+      matchDetails: {
+        requiredMatched: [],
+        preferredMatched: [],
+        totalScore: 20,
+        threshold: 15,
+      },
+    });
+
+    const transport = new MockEmailTransport();
+    const sender = new EmailSender(
+      transport,
+      emailLogStore,
+      resultStore,
+      candidateStore,
+      emailConfig,
+    );
+    await sender.sendPending("运维");
+
+    const imapClient = new MockImapClient();
+    imapClient.messages = [
+      {
+        uid: 1,
+        messageId: "<reply-002@test>",
+        inReplyTo: "<mock-1@test>",
+        subject: "Re: 招聘筛选",
+        text: "不合适，淘汰",
+      },
+    ];
+    const monitor = new ReplyMonitor(
+      imapClient,
+      emailLogStore,
+      resultStore,
+      emailConfig,
+    );
+    await monitor.checkReplies();
+
+    const results = resultStore.getByStatus("eliminated");
+    expect(results.length).toBe(1);
+    expect(results[0].candidateId).toBe("c2");
+
+    db.close();
   });
 });

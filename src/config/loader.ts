@@ -57,4 +57,13 @@ export function validateConfig(config: AppConfig): void {
       throw new Error(`Position[${i}]: screening.preferred must be an array`);
     }
   }
+
+  if (config.email) {
+    const e = config.email;
+    if (!e.smtpHost) throw new Error("email.smtpHost is required");
+    if (!e.smtpUser) throw new Error("email.smtpUser is required");
+    if (!e.to) throw new Error("email.to is required");
+    if (!e.imapHost) throw new Error("email.imapHost is required");
+    if (!e.imapUser) throw new Error("email.imapUser is required");
+  }
 }

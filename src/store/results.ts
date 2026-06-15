@@ -53,4 +53,26 @@ export class ResultStore {
       `)
       .run(status, candidateId, positionName);
   }
+
+  getPassedWithoutSent(
+    positionName: string,
+    hasSentFn: (candidateId: string) => boolean,
+  ): ScreeningResult[] {
+    const rows = this.db
+      .prepare(
+        "SELECT * FROM screening_results WHERE status = 'passed' AND position_name = ? ORDER BY screened_at DESC",
+      )
+      .all(positionName) as ResultRow[];
+    return rows
+      .filter((row) => !hasSentFn(row.candidate_id))
+      .map((row) => ({
+        id: row.id,
+        candidateId: row.candidate_id,
+        positionName: row.position_name,
+        status: row.status as ScreeningStatus,
+        score: row.score,
+        matchDetails: JSON.parse(row.match_details),
+        screenedAt: row.screened_at,
+      }));
+  }
 }
