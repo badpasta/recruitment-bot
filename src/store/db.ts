@@ -65,6 +65,22 @@ export function initDatabase(dbPath: string): Database.Database {
 
     CREATE INDEX IF NOT EXISTS idx_email_log_message_id
       ON email_log(message_id);
+
+    CREATE TABLE IF NOT EXISTS elimination_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      position_name TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      template_used TEXT,
+      platform_replied INTEGER NOT NULL DEFAULT 0,
+      eliminated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_elimination_log_candidate
+      ON elimination_log(candidate_id);
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_elimination_log_unique
+      ON elimination_log(candidate_id, position_name);
   `);
 
   // Migrate existing screening_results CHECK constraint if needed

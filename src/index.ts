@@ -5,6 +5,7 @@ import { CandidateStore } from "./store/candidates.js";
 import { ResultStore } from "./store/results.js";
 import { RunStateStore } from "./store/run-state.js";
 import { EmailLogStore } from "./store/email-log.js";
+import { EliminationStore } from "./store/elimination.js";
 import { KimiWebBridgeClient } from "./scraper/browser-client.js";
 import { Scraper } from "./scraper/index.js";
 import { Screener } from "./screener/index.js";
@@ -13,6 +14,8 @@ import { EmailSender } from "./email/sender.js";
 import { ReplyMonitor } from "./email/monitor.js";
 import { NodemailerTransport } from "./email/nodemailer-transport.js";
 import { ImapFlowClient } from "./email/imapflow-client.js";
+import { EliminationProcessor } from "./elimination/processor.js";
+import { BossMessenger } from "./elimination/boss-messenger.js";
 import { createLogger } from "./utils/logger.js";
 
 const log = createLogger("recruitment-bot");
@@ -34,6 +37,7 @@ async function main(): Promise<void> {
   const resultStore = new ResultStore(db);
   const runState = new RunStateStore(db);
   const emailLogStore = new EmailLogStore(db);
+  const eliminationStore = new EliminationStore(db);
 
   const browser = new KimiWebBridgeClient(WEBBRIDGE_ENDPOINT);
 
@@ -79,6 +83,20 @@ async function main(): Promise<void> {
   } else if (config.email && !emailPassword) {
     log.warn("EMAIL_PASSWORD not set, email modules disabled");
   }
+
+  // Initialize elimination module
+  const eliminationTemplates = config.elimination?.templates ?? [
+    "{{name}}您好，感谢您的关注。经过综合评估，该岗位暂时不太匹配，祝您前程似锦！",
+  ];
+  const bossMessenger = new BossMessenger(browser, position.bossUrl);
+  const eliminationProcessor = new EliminationProcessor(
+    eliminationStore,
+    resultStore,
+    candidateStore,
+    bossMessenger,
+    eliminationTemplates,
+  );
+  log.info(`Elimination module initialized (${eliminationTemplates.length} template(s))`);
 
   async function scanRound(): Promise<void> {
     if (runState.get("is_paused") === "true") {
@@ -141,6 +159,13 @@ async function main(): Promise<void> {
       } catch (err) {
         log.error(`Reply monitor failed: ${err}`);
       }
+    }
+
+    // 4. Process eliminated candidates
+    try {
+      await eliminationProcessor.processEliminated(position.name);
+    } catch (err) {
+      log.error(`Elimination processor failed: ${err}`);
     }
   }
 

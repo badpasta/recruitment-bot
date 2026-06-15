@@ -127,10 +127,32 @@ export interface EmailLogEntry {
   processedAt?: string;
 }
 
+/** An entry in the elimination_log table */
+export interface EliminationLogEntry {
+  id?: number;
+  candidateId: string;
+  positionName: string;
+  reason: string;
+  templateUsed?: string;
+  platformReplied: boolean;
+  eliminatedAt?: string;
+}
+
+/** Elimination configuration */
+export interface EliminationConfig {
+  templates: string[];
+}
+
 /** Top-level YAML config structure */
 export interface AppConfig {
   positions: PositionConfig[];
   email?: EmailConfig;
+  elimination?: EliminationConfig;
+}
+
+/** Abstraction for sending messages on Boss直聘 platform */
+export interface PlatformMessenger {
+  sendMessage(candidateId: string, candidateName: string, message: string): Promise<boolean>;
 }
 
 /** Runtime guard for Candidate objects */
