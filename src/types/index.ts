@@ -34,12 +34,23 @@ export interface ProjectEntry {
 }
 
 /** Status of a screening result */
-export type ScreeningStatus = "passed" | "rejected" | "pending";
+export type ScreeningStatus = "passed" | "rejected" | "pending" | "eliminated";
 
-const VALID_STATUSES: ScreeningStatus[] = ["passed", "rejected", "pending"];
+const VALID_STATUSES: ScreeningStatus[] = ["passed", "rejected", "pending", "eliminated"];
 
 export function isValidScreeningStatus(s: string): s is ScreeningStatus {
   return VALID_STATUSES.includes(s as ScreeningStatus);
+}
+
+/** Record of a candidate being eliminated from a position */
+export interface EliminationRecord {
+  id?: number;
+  candidateId: string;
+  positionName: string;
+  reason?: string;
+  templateUsed?: string;
+  platformReplied: boolean;
+  eliminatedAt?: string;
 }
 
 /** Screening result for a candidate on a specific position */
