@@ -28,10 +28,11 @@ export function initDatabase(dbPath: string): Database.Database {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       candidate_id TEXT NOT NULL REFERENCES candidates(id),
       position_name TEXT NOT NULL,
-      status TEXT NOT NULL CHECK(status IN ('passed', 'rejected', 'pending', 'eliminated')),
+      status TEXT NOT NULL CHECK(status IN ('passed', 'rejected', 'pending', 'eliminated', 'interview')),
       score INTEGER NOT NULL DEFAULT 0,
       match_details JSON NOT NULL,
-      screened_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      screened_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      email_notified_at DATETIME
     );
 
     CREATE TABLE IF NOT EXISTS run_state (
@@ -83,6 +84,22 @@ export function initDatabase(dbPath: string): Database.Database {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS sent_emails (
+      message_id TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      position_name TEXT NOT NULL,
+      result_id INTEGER REFERENCES screening_results(id),
+      sent_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS processed_replies (
+      message_id TEXT PRIMARY KEY,
+      in_reply_to TEXT,
+      candidate_id TEXT,
+      action TEXT,
+      processed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_screening_results_status
       ON screening_results(status);
 
@@ -106,10 +123,19 @@ export function initDatabase(dbPath: string): Database.Database {
 
     CREATE INDEX IF NOT EXISTS idx_strategy_suggestions_status
       ON strategy_suggestions(status);
+
+    CREATE INDEX IF NOT EXISTS idx_sent_emails_candidate
+      ON sent_emails(candidate_id);
   `);
 
-  // Migration: upgrade screening_results CHECK constraint to include 'eliminated'
-  // SQLite cannot ALTER a CHECK constraint, so the table must be rebuilt.
+  // Migration: add email_notified_at to existing screening_results table
+  const columns = db.prepare("PRAGMA table_info(screening_results)").all() as { name: string }[];
+  if (!columns.some(c => c.name === "email_notified_at")) {
+    db.exec("ALTER TABLE screening_results ADD COLUMN email_notified_at DATETIME");
+    log.info("Migration: added email_notified_at column to screening_results");
+  }
+
+  // Migration: upgrade screening_results CHECK constraint to include 'eliminated' and 'interview'
   const tableInfo = db
     .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='screening_results'")
     .get() as { sql: string } | undefined;
@@ -121,10 +147,11 @@ export function initDatabase(dbPath: string): Database.Database {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         candidate_id TEXT NOT NULL REFERENCES candidates(id),
         position_name TEXT NOT NULL,
-        status TEXT NOT NULL CHECK(status IN ('passed', 'rejected', 'pending', 'eliminated')),
+        status TEXT NOT NULL CHECK(status IN ('passed', 'rejected', 'pending', 'eliminated', 'interview')),
         score INTEGER NOT NULL DEFAULT 0,
         match_details JSON NOT NULL,
-        screened_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        screened_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        email_notified_at DATETIME
       );
 
       INSERT INTO screening_results SELECT * FROM screening_results_old;
@@ -135,7 +162,7 @@ export function initDatabase(dbPath: string): Database.Database {
       CREATE INDEX IF NOT EXISTS idx_screening_results_candidate
         ON screening_results(candidate_id);
     `);
-    log.info("Migrated screening_results to include 'eliminated' status");
+    log.info("Migrated screening_results to include 'eliminated' and 'interview' statuses");
   }
 
   log.info(`Database initialized at ${dbPath}`);

@@ -4,10 +4,13 @@ import { initDatabase } from "./store/db.js";
 import { CandidateStore } from "./store/candidates.js";
 import { ResultStore } from "./store/results.js";
 import { RunStateStore } from "./store/run-state.js";
+import { EmailStore } from "./store/email-store.js";
 import { KimiWebBridgeClient } from "./scraper/browser-client.js";
 import { Scraper } from "./scraper/index.js";
 import { Screener } from "./screener/index.js";
 import { Scheduler } from "./scheduler/index.js";
+import { loadEmailConfig } from "./email/config.js";
+import { EmailOrchestrator } from "./email/orchestrator.js";
 import { createLogger } from "./utils/logger.js";
 
 const log = createLogger("recruitment-bot");
@@ -28,12 +31,31 @@ async function main(): Promise<void> {
   const candidateStore = new CandidateStore(db);
   const resultStore = new ResultStore(db);
   const runState = new RunStateStore(db);
+  const emailStore = new EmailStore(db);
 
   const browser = new KimiWebBridgeClient(WEBBRIDGE_ENDPOINT);
 
   const position = config.positions[0];
   const screener = new Screener(position.screening);
   const scraper = new Scraper(candidateStore);
+
+  // Initialize email orchestrator if config is available
+  const emailConfig = loadEmailConfig();
+  let emailOrchestrator: EmailOrchestrator | null = null;
+  let emailScheduler: Scheduler | null = null;
+
+  if (emailConfig) {
+    emailOrchestrator = new EmailOrchestrator(emailConfig, candidateStore, resultStore, emailStore);
+    log.info(`Email enabled: sending to ${emailConfig.to}, polling every ${emailConfig.pollIntervalMs / 1000}s`);
+
+    // Email poll cycle: send notifications + process replies
+    emailScheduler = new Scheduler(
+      () => emailOrchestrator!.runCycle(),
+      { intervalMs: emailConfig.pollIntervalMs, maxBackoffMs: 1800000 },
+    );
+  } else {
+    log.warn("Email disabled: set SMTP_HOST, IMAP_HOST, EMAIL_FROM, EMAIL_TO env vars to enable");
+  }
 
   async function scanRound(): Promise<void> {
     if (runState.get("is_paused") === "true") {
@@ -85,7 +107,9 @@ async function main(): Promise<void> {
   process.on("SIGINT", () => {
     log.info("Received SIGINT, shutting down...");
     scheduler.stop();
+    emailScheduler?.stop();
     browser.disconnect();
+    emailOrchestrator?.shutdown();
     db.close();
     process.exit(0);
   });
@@ -93,10 +117,17 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => {
     log.info("Received SIGTERM, shutting down...");
     scheduler.stop();
+    emailScheduler?.stop();
     browser.disconnect();
+    emailOrchestrator?.shutdown();
     db.close();
     process.exit(0);
   });
+
+  // Start email scheduler if enabled (fire-and-forget, runs alongside scan scheduler)
+  if (emailScheduler) {
+    emailScheduler.start().catch((err) => log.error(`Email scheduler error: ${err}`));
+  }
 
   await scheduler.start();
 }
