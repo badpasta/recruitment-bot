@@ -7,6 +7,7 @@ export interface BrowserClient {
   getPageContent(): Promise<string>;
   evaluate<T>(code: string): Promise<T>;
   click(selector: string): Promise<void>;
+  type(selector: string, text: string): Promise<void>;
   disconnect(): Promise<void>;
 }
 
@@ -40,6 +41,10 @@ export class KimiWebBridgeClient implements BrowserClient {
 
   async click(selector: string): Promise<void> {
     await this.call("click", { selector });
+  }
+
+  async type(selector: string, text: string): Promise<void> {
+    await this.call("type", { selector, text });
   }
 
   async disconnect(): Promise<void> {

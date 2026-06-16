@@ -126,6 +126,7 @@ export interface ScreeningResult {
   score: number;
   matchDetails: MatchDetails;
   screenedAt?: string;
+  emailNotifiedAt?: string;
 }
 
 /** Detailed breakdown of how rules matched */
@@ -178,6 +179,7 @@ export interface PreferredRule extends RequiredRule {
 /** Top-level YAML config structure */
 export interface AppConfig {
   positions: PositionConfig[];
+  email?: EmailConfig;
 }
 
 /** Elimination message templates config from templates.yaml */
@@ -250,4 +252,57 @@ export function isCandidate(obj: unknown): obj is Candidate {
     o.rawProfile !== null &&
     typeof o.rawProfile === "object"
   );
+}
+
+/** Email configuration from YAML config */
+export interface EmailConfig {
+  smtp: {
+    host: string;
+    port: number;
+    secure: boolean;
+    user: string;
+    pass: string;
+  };
+  imap: {
+    host: string;
+    port: number;
+    secure: boolean;
+    user: string;
+    pass: string;
+  };
+  from: string;
+  to: string;
+  pollIntervalMs: number;
+}
+
+/** A record of a sent email */
+export interface SentEmail {
+  messageId: string;
+  candidateId: string;
+  positionName: string;
+  resultId?: number;
+  sentAt?: string;
+}
+
+/** A processed reply email */
+export interface ProcessedReply {
+  messageId: string;
+  inReplyTo?: string;
+  candidateId?: string;
+  action?: string;
+  processedAt?: string;
+}
+
+/** Action parsed from a reply email */
+export type ReplyAction = "interview" | "eliminated" | "unknown";
+
+/** Data needed to send a notification email for a passed candidate */
+export interface EmailNotificationData {
+  candidateName: string;
+  positionName: string;
+  score: number;
+  skills: string[];
+  profileUrl: string;
+  candidateId: string;
+  resultId: number;
 }

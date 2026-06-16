@@ -21,6 +21,9 @@ describe("initDatabase", () => {
     expect(names).toContain("interview_events");
     expect(names).toContain("interview_feedback");
     expect(names).toContain("strategy_suggestions");
+    expect(names).toContain("elimination_log");
+    expect(names).toContain("sent_emails");
+    expect(names).toContain("processed_replies");
     expect(names).toContain("interview_candidates");
     expect(names).toContain("interview_schedule");
     expect(names).toContain("interview_messages");
