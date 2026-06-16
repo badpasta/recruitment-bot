@@ -122,6 +122,58 @@ export interface TemplatesConfig {
   };
 }
 
+/** Status of an interview event */
+export type InterviewEventStatus = "scheduled" | "completed" | "cancelled" | "no_show";
+
+/** Type of interview */
+export type InterviewType = "phone" | "video" | "onsite";
+
+/** An interview event for a candidate */
+export interface InterviewEvent {
+  id?: number;
+  candidateId: string;
+  positionName: string;
+  interviewType: InterviewType;
+  scheduledAt: string;
+  status: InterviewEventStatus;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** A single dimension rating in interview feedback */
+export interface FeedbackDimension {
+  name: string;
+  rating: number;
+  comment?: string;
+}
+
+/** Feedback from an interview */
+export interface InterviewFeedback {
+  id?: number;
+  interviewEventId: number;
+  candidateId: string;
+  dimensions: FeedbackDimension[];
+  overallComment: string;
+  recommended: boolean;
+  interviewerName: string;
+  createdAt?: string;
+}
+
+/** Status of a strategy suggestion */
+export type SuggestionStatus = "pending" | "accepted" | "rejected";
+
+/** A strategy suggestion derived from interview feedback */
+export interface StrategySuggestion {
+  id?: number;
+  content: string;
+  status: SuggestionStatus;
+  relatedFeedbackIds: number[];
+  priority: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 /** Runtime guard for Candidate objects */
 export function isCandidate(obj: unknown): obj is Candidate {
   if (!obj || typeof obj !== "object") return false;

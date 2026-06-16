@@ -50,6 +50,39 @@ export function initDatabase(dbPath: string): Database.Database {
       eliminated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS interview_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      position_name TEXT NOT NULL,
+      interview_type TEXT NOT NULL CHECK(interview_type IN ('phone', 'video', 'onsite')),
+      scheduled_at DATETIME NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('scheduled', 'completed', 'cancelled', 'no_show')) DEFAULT 'scheduled',
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS interview_feedback (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      interview_event_id INTEGER NOT NULL REFERENCES interview_events(id),
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      dimensions JSON NOT NULL,
+      overall_comment TEXT NOT NULL,
+      recommended INTEGER NOT NULL DEFAULT 0,
+      interviewer_name TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS strategy_suggestions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      content JSON NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('pending', 'accepted', 'rejected')) DEFAULT 'pending',
+      related_feedback_ids JSON NOT NULL DEFAULT '[]',
+      priority INTEGER NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_screening_results_status
       ON screening_results(status);
 
@@ -58,6 +91,21 @@ export function initDatabase(dbPath: string): Database.Database {
 
     CREATE INDEX IF NOT EXISTS idx_elimination_log_candidate
       ON elimination_log(candidate_id);
+
+    CREATE INDEX IF NOT EXISTS idx_interview_events_candidate
+      ON interview_events(candidate_id);
+
+    CREATE INDEX IF NOT EXISTS idx_interview_events_status
+      ON interview_events(status);
+
+    CREATE INDEX IF NOT EXISTS idx_interview_feedback_candidate
+      ON interview_feedback(candidate_id);
+
+    CREATE INDEX IF NOT EXISTS idx_interview_feedback_event
+      ON interview_feedback(interview_event_id);
+
+    CREATE INDEX IF NOT EXISTS idx_strategy_suggestions_status
+      ON strategy_suggestions(status);
   `);
 
   // Migration: upgrade screening_results CHECK constraint to include 'eliminated'
