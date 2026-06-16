@@ -52,6 +52,13 @@ export class InterviewFeedbackStore {
     return rows.map(this.toInterviewFeedback);
   }
 
+  getRecent(limit: number): InterviewFeedback[] {
+    const rows = this.db
+      .prepare("SELECT * FROM interview_feedback ORDER BY created_at DESC LIMIT ?")
+      .all(limit) as InterviewFeedbackRow[];
+    return rows.map(this.toInterviewFeedback);
+  }
+
   private toInterviewFeedback(row: InterviewFeedbackRow): InterviewFeedback {
     return {
       id: row.id,

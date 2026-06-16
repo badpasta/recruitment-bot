@@ -176,6 +176,36 @@ export interface StrategySuggestion {
   updatedAt?: string;
 }
 
+/** Type of a strategy adjustment: add a new rule, modify existing, or delete */
+export type StrategyAdjustmentType = "add" | "modify" | "delete";
+
+/** Describes a specific rule to adjust in the screening config */
+export interface TargetRule {
+  field: string;
+  position: "required" | "preferred";
+  containsAny?: string[];
+  containsAll?: string[];
+  notIn?: string[];
+  in?: string[];
+  min?: number;
+  max?: number;
+  weight?: number;
+}
+
+/** A structured adjustment suggestion from AI analysis */
+export interface StrategyAdjustment {
+  type: StrategyAdjustmentType;
+  targetRule: TargetRule;
+  reason: string;
+}
+
+/** Result of an AI strategy analysis run */
+export interface StrategyAnalysisResult {
+  adjustments: StrategyAdjustment[];
+  analyzedFeedbackCount: number;
+  analyzedAt: string;
+}
+
 /** Runtime guard for Candidate objects */
 export function isCandidate(obj: unknown): obj is Candidate {
   if (!obj || typeof obj !== "object") return false;
