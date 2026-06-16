@@ -115,6 +115,13 @@ export interface AppConfig {
   positions: PositionConfig[];
 }
 
+/** Elimination message templates config from templates.yaml */
+export interface TemplatesConfig {
+  elimination: {
+    templates: string[];
+  };
+}
+
 /** Runtime guard for Candidate objects */
 export function isCandidate(obj: unknown): obj is Candidate {
   if (!obj || typeof obj !== "object") return false;
