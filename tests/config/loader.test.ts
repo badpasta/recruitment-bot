@@ -27,6 +27,15 @@ describe("loadConfig", () => {
     expect(preferred.containsAny).toEqual(["docker"]);
     expect(preferred.weight).toBe(10);
   });
+
+  it("parses optional interview config", () => {
+    const config = loadConfig(resolve(fixturesDir, "valid.yaml"));
+    const interview = config.positions[0].interview;
+    expect(interview).toBeDefined();
+    expect(interview!.availableSlots).toEqual(["09:00-10:00", "14:00-15:00"]);
+    expect(interview!.durationMinutes).toBe(30);
+    expect(interview!.meetingSubject).toBe("Test Interview");
+  });
 });
 
 describe("validateConfig", () => {
