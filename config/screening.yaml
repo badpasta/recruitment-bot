@@ -30,3 +30,11 @@ positions:
           weight: 5
 
       pass_threshold: 15
+
+    interview:
+      available_slots:
+        - "10:00-11:00"
+        - "14:00-15:00"
+        - "16:00-17:00"
+      duration_minutes: 60
+      meeting_subject: "面试邀请 - 中级运维工程师"

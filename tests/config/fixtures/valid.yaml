@@ -12,3 +12,10 @@ positions:
           contains_any: ["docker"]
           weight: 10
       pass_threshold: 10
+
+    interview:
+      available_slots:
+        - "09:00-10:00"
+        - "14:00-15:00"
+      duration_minutes: 30
+      meeting_subject: "Test Interview"

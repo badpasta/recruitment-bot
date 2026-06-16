@@ -84,6 +84,39 @@ export function initDatabase(dbPath: string): Database.Database {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS interview_candidates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      position_name TEXT NOT NULL,
+      schedule_status TEXT NOT NULL CHECK(schedule_status IN ('waiting_time', 'time_proposed', 'confirmed', 'scheduled', 'cancelled')) DEFAULT 'waiting_time',
+      resume_summary TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(candidate_id, position_name)
+    );
+
+    CREATE TABLE IF NOT EXISTS interview_schedule (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      position_name TEXT NOT NULL,
+      interview_time DATETIME,
+      meeting_link TEXT,
+      calendar_event_id TEXT,
+      status TEXT NOT NULL CHECK(status IN ('waiting_time', 'time_proposed', 'confirmed', 'scheduled', 'cancelled')) DEFAULT 'waiting_time',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(candidate_id, position_name)
+    );
+
+    CREATE TABLE IF NOT EXISTS interview_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      position_name TEXT NOT NULL,
+      direction TEXT NOT NULL CHECK(direction IN ('sent', 'received')),
+      content TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS sent_emails (
       message_id TEXT PRIMARY KEY,
       candidate_id TEXT NOT NULL REFERENCES candidates(id),
@@ -124,6 +157,24 @@ export function initDatabase(dbPath: string): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_strategy_suggestions_status
       ON strategy_suggestions(status);
 
+    CREATE INDEX IF NOT EXISTS idx_interview_candidates_status
+      ON interview_candidates(schedule_status);
+
+    CREATE INDEX IF NOT EXISTS idx_interview_candidates_candidate
+      ON interview_candidates(candidate_id);
+
+    CREATE INDEX IF NOT EXISTS idx_interview_schedule_candidate
+      ON interview_schedule(candidate_id);
+
+    CREATE INDEX IF NOT EXISTS idx_interview_schedule_status
+      ON interview_schedule(status);
+
+    CREATE INDEX IF NOT EXISTS idx_interview_schedule_time
+      ON interview_schedule(interview_time);
+
+    CREATE INDEX IF NOT EXISTS idx_interview_messages_candidate
+      ON interview_messages(candidate_id);
+
     CREATE INDEX IF NOT EXISTS idx_sent_emails_candidate
       ON sent_emails(candidate_id);
   `);
@@ -136,10 +187,10 @@ export function initDatabase(dbPath: string): Database.Database {
   }
 
   // Migration: upgrade screening_results CHECK constraint to include 'eliminated' and 'interview'
-  const tableInfo = db
+  const screeningSQL = db
     .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='screening_results'")
     .get() as { sql: string } | undefined;
-  if (tableInfo && !tableInfo.sql.includes("'eliminated'")) {
+  if (screeningSQL && !screeningSQL.sql.includes("'interview'")) {
     db.exec(`
       ALTER TABLE screening_results RENAME TO screening_results_old;
 
@@ -162,7 +213,7 @@ export function initDatabase(dbPath: string): Database.Database {
       CREATE INDEX IF NOT EXISTS idx_screening_results_candidate
         ON screening_results(candidate_id);
     `);
-    log.info("Migrated screening_results to include 'eliminated' and 'interview' statuses");
+    log.info("Migrated screening_results to include 'eliminated' and 'interview' status");
   }
 
   log.info(`Database initialized at ${dbPath}`);

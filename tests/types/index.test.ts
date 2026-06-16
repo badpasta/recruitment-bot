@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   isValidScreeningStatus,
+  isValidScheduleStatus,
   isCandidate,
   type Candidate,
 } from "../../src/types/index.js";
@@ -10,11 +11,29 @@ describe("isValidScreeningStatus", () => {
     expect(isValidScreeningStatus("passed")).toBe(true);
     expect(isValidScreeningStatus("rejected")).toBe(true);
     expect(isValidScreeningStatus("pending")).toBe(true);
+    expect(isValidScreeningStatus("eliminated")).toBe(true);
+    expect(isValidScreeningStatus("interview")).toBe(true);
   });
 
   it("rejects invalid statuses", () => {
     expect(isValidScreeningStatus("unknown")).toBe(false);
     expect(isValidScreeningStatus("")).toBe(false);
+  });
+});
+
+describe("isValidScheduleStatus", () => {
+  it("accepts valid schedule statuses", () => {
+    expect(isValidScheduleStatus("waiting_time")).toBe(true);
+    expect(isValidScheduleStatus("time_proposed")).toBe(true);
+    expect(isValidScheduleStatus("confirmed")).toBe(true);
+    expect(isValidScheduleStatus("scheduled")).toBe(true);
+    expect(isValidScheduleStatus("cancelled")).toBe(true);
+  });
+
+  it("rejects invalid schedule statuses", () => {
+    expect(isValidScheduleStatus("unknown")).toBe(false);
+    expect(isValidScheduleStatus("")).toBe(false);
+    expect(isValidScheduleStatus("passed")).toBe(false);
   });
 });
 

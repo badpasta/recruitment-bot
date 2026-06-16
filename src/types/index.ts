@@ -34,12 +34,76 @@ export interface ProjectEntry {
 }
 
 /** Status of a screening result */
-export type ScreeningStatus = "passed" | "rejected" | "pending" | "interview" | "eliminated";
+export type ScreeningStatus = "passed" | "rejected" | "pending" | "eliminated" | "interview";
 
-const VALID_STATUSES: ScreeningStatus[] = ["passed", "rejected", "pending", "interview", "eliminated"];
+const VALID_STATUSES: ScreeningStatus[] = ["passed", "rejected", "pending", "eliminated", "interview"];
 
 export function isValidScreeningStatus(s: string): s is ScreeningStatus {
   return VALID_STATUSES.includes(s as ScreeningStatus);
+}
+
+/** Status of an interview candidate in the scheduling pipeline */
+export type InterviewScheduleStatus =
+  | "waiting_time"
+  | "time_proposed"
+  | "confirmed"
+  | "scheduled"
+  | "cancelled";
+
+const VALID_SCHEDULE_STATUSES: InterviewScheduleStatus[] = [
+  "waiting_time",
+  "time_proposed",
+  "confirmed",
+  "scheduled",
+  "cancelled",
+];
+
+export function isValidScheduleStatus(s: string): s is InterviewScheduleStatus {
+  return VALID_SCHEDULE_STATUSES.includes(s as InterviewScheduleStatus);
+}
+
+/** Direction of an interview message (Boss直聘 chat) */
+export type InterviewMessageDirection = "sent" | "received";
+
+/** A candidate who has entered the interview scheduling pipeline */
+export interface InterviewCandidate {
+  id?: number;
+  candidateId: string;
+  positionName: string;
+  scheduleStatus: InterviewScheduleStatus;
+  resumeSummary?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** A scheduled interview with meeting details */
+export interface InterviewSchedule {
+  id?: number;
+  candidateId: string;
+  positionName: string;
+  interviewTime?: string;
+  meetingLink?: string;
+  calendarEventId?: string;
+  status: InterviewScheduleStatus;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** A Boss直聘 chat message with a candidate during the interview process */
+export interface InterviewMessage {
+  id?: number;
+  candidateId: string;
+  positionName: string;
+  direction: InterviewMessageDirection;
+  content: string;
+  createdAt?: string;
+}
+
+/** Interview scheduling configuration */
+export interface InterviewConfig {
+  availableSlots: string[];
+  durationMinutes: number;
+  meetingSubject: string;
 }
 
 /** Record of a candidate being eliminated from a position */
@@ -89,6 +153,7 @@ export interface PositionConfig {
   name: string;
   bossUrl: string;
   screening: ScreeningConfig;
+  interview?: InterviewConfig;
 }
 
 export interface ScreeningConfig {
