@@ -103,7 +103,27 @@ export interface InterviewMessage {
 export interface InterviewConfig {
   availableSlots: string[];
   durationMinutes: number;
+  bufferMinutes: number;
+  replyTimeoutDays: number;
+  maxOptionsPerRound: number;
+  messageTemplate: string;
   meetingSubject: string;
+}
+
+/** A time slot offered to a candidate */
+export interface InterviewSlot {
+  startTime: string;  // ISO 8601
+  endTime: string;    // ISO 8601
+  label: string;      // "6月16日 10:00-11:00"
+  available: boolean;
+}
+
+/** Result of parsing a candidate's Boss直聘 reply */
+export interface ParsedReply {
+  type: 'slot_selected' | 'custom_time' | 'declined' | 'unknown';
+  selectedSlotIndex?: number;
+  customTime?: string;
+  rawText: string;
 }
 
 /** Record of a candidate being eliminated from a position */
