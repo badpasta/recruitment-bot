@@ -1,0 +1,3 @@
+topic_template: "面试 - {candidateName} / {positionName}"
+duration_minutes: 60
+web_url: "https://meeting.tencent.com/"
